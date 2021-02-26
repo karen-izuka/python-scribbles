@@ -1,1 +1,1 @@
-# python_scribbles
+# python-scribbles
