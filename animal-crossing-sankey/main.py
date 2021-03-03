@@ -4,8 +4,6 @@ import json
 import pandas as pd
 import requests
 
-#the purpose of this script is to turn a csv file into a nested json file for use in a d3 sankey diagram
-
 def main():
   try:
     #get df
@@ -14,6 +12,7 @@ def main():
     df = (pd.read_csv(io.StringIO(data_string.decode('utf-8')))
             .groupby(['Gender','Personality','Hobby'], as_index=False).agg({'Unique_Entry_ID': 'count'})
             .rename(columns={'Unique_Entry_ID': 'value'}))
+    #select nodes
     nodes = ['Gender', 'Personality', 'Hobby']
 
     #turn into json
@@ -21,9 +20,10 @@ def main():
       df[node] = '{0} '.format(i) + df[node]
 
     #create nodes
-    node_dict = {}
-    node_list = []
-    node_name = []
+    #instantiate empty containers
+    node_dict = {} #helper container
+    node_list = [] #nodes
+    node_name = [] #used to create links
     for i, node in enumerate(nodes):
       node_dict['node{0}'.format(i)] = list(df[node].drop_duplicates())
     for node in node_dict:
@@ -34,10 +34,9 @@ def main():
         node_name.append(item)
 
     #create links
-    df_dict = {}
-    link_dict = {}
-
-    #create edges
+    #instantiate empty containers
+    df_dict = {} #helper container
+    link_dict = {} #helper container
     i = 0
     while i < len(nodes)-1:
       df_dict['df{0}'.format(i)] = df.groupby([nodes[i], nodes[i+1]], as_index=False).agg({'value': 'sum'})
@@ -46,22 +45,26 @@ def main():
       df_dict['df{0}'.format(i)] = df_dict['df{0}'.format(i)][['source', 'target', 'value']]
       link_dict['link{0}'.format(i)] = df_dict['df{0}'.format(i)].to_dict('records')
       i += 1
-
-    link_list = []
+    
+    link_list = [] #links
     for i in link_dict:
       for j in link_dict[i]:
         link_list.append(j)
-            
+    
+    #output to json file
     data = {'nodes': node_list, 'links': link_list}
     data = json.dumps(data)
     load = json.loads(data)
     with open('/Users/karenizuka/Projects/python-scribbles/animal-crossing-sankey/data.json', 'w') as f:
       json.dump(load, f)
 
-    print('success')
+    #message box
+    click.echo(f'Success! JSON file created!')
+    input('Press enter to continue')
 
   except Exception as e:
-    print(e)
+    click.echo(f'Process failed because {e}')
+    input('Press enter to continue')
 
 if __name__ == '__main__':
   main()
