@@ -15,10 +15,12 @@ def main():
     token = 'QOfbQjpzVcCmENdSHcKHvzCpxFoRgytS'
 
     #https://www.ncdc.noaa.gov/cdo-web/datatools/findstation
-    station_id = {'SFO':'GHCND:USW00023234',
-                  'WNC':'GHCND:USW00023254',
-                  'NYC':'GHCND:USW00014732',
-                  'ORE':'GHCND:USS0021F21S'}
+    station_id = {'SF': 'GHCND:USW00023234',
+                  'Concord': 'GHCND:USW00023254',
+                  'LA': 'GHCND:USW00023174',
+                  'NYC': 'GHCND:USW00014732',
+                  'Seattle': 'GHCND:USW00024233',
+                  'Bend': 'GHCND:USS0021F21S'}
 
     #loop through stations to generate weather df
     for i in station_id.keys():
