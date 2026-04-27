@@ -18,10 +18,10 @@ def main():
     station_id = {
                   'Lafayette': 'USR0000CBRI',
                   'SF': 'USW00023234',
-                  'Oakland': 'USW00023230',
-                  'Livermore': 'USW00023285',
-                  'San Carlos': 'USC00047339',
-                  'San Jose': 'USW00023293',
+                  'LA': 'USW00093134',
+                  'Phoenix': 'USW00023183',
+                  'NYC': 'USW00094728',
+                  'Orlando': 'USW00012815',
                 }
 
     #loop through stations to generate weather df
