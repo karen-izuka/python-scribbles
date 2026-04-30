@@ -1,17 +1,23 @@
 import click
+import json
 import time
 import requests
 import pandas as pd
+from pathlib import Path
 
 
-OUTPUT_PATH = '/Users/karencantrell/Documents/Projects/python-scribbles/ulta-web-scraper/data.csv'
+BASE_DIR       = Path('/Users/karencantrell/Documents/Projects/python-scribbles/ulta-web-scraper')
+OUTPUT_PATH    = BASE_DIR / 'data_tools.csv'
+CHECKPOINT_PATH = BASE_DIR / 'checkpoint.json'
 
 CATEGORIES = [
-    ('Face Makeup', '/shop/makeup/face'),
-    ('Lip Makeup',  '/shop/makeup/lips'),
-    ('Eye Makeup',  '/shop/makeup/eyes'),
-    ('Skincare',    '/shop/skin-care/all'),
-    ('Hair Care',   '/shop/hair/all'),
+    #('Makeup',    '/shop/makeup/all'),
+    #('Skincare',  '/shop/skin-care/all'),
+    #('Hair Care', '/shop/hair/all'),
+    #('Fragrance', '/shop/fragrance/all'),
+    #('Body Care', '/shop/body-care/all'),
+    #('Wellness',  '/shop/wellness-by-ulta-beauty/all'),
+    ('Tools',     '/shop/tools-brushes/all'),
 ]
 
 GRAPHQL_URL = 'https://www.ulta.com/v1/client/dxl/graphql'
@@ -24,12 +30,12 @@ query Page($url: JSON, $moduleParams: JSON) {
 }
 """
 
-DELAY_SECONDS      = 2
-BREAK_EVERY_PAGES  = 25
-BREAK_SECONDS      = 45
-CATEGORY_PAUSE     = 90
-MAX_RETRIES        = 8
-RETRY_BACKOFF      = 60
+DELAY_SECONDS     = 2
+BREAK_EVERY_PAGES = 25
+BREAK_SECONDS     = 45
+CATEGORY_PAUSE    = 90
+MAX_RETRIES       = 8
+RETRY_BACKOFF     = 60
 
 session = requests.Session()
 session.headers.update({
@@ -92,14 +98,49 @@ def extract_products(plr_module, category_name):
     return products
 
 
-def main():
-    try:
-        all_products = []
+def load_checkpoint():
+    if CHECKPOINT_PATH.exists():
+        return set(json.loads(CHECKPOINT_PATH.read_text()).get('completed', []))
+    return set()
 
-        for cat_idx, (category_name, path) in enumerate(CATEGORIES):
-            if cat_idx > 0:
+
+def save_checkpoint(completed):
+    CHECKPOINT_PATH.write_text(json.dumps({'completed': list(completed)}))
+
+
+def save_products(all_products):
+    df = (pd.DataFrame(all_products)
+            .reindex(columns=['category', 'brand', 'name', 'price', 'avg_rating', 'num_ratings'])
+            .drop_duplicates(subset=['name', 'brand'])
+            .reset_index(drop=True))
+    df.to_csv(OUTPUT_PATH, index=False)
+    return df
+
+
+@click.command()
+@click.option('--resume', is_flag=True, default=False, help='Skip already-completed categories.')
+def main(resume):
+    completed = set()
+    all_products = []
+
+    if resume:
+        completed = load_checkpoint()
+        if completed and OUTPUT_PATH.exists():
+            existing = pd.read_csv(OUTPUT_PATH)
+            all_products = existing.to_dict('records')
+            click.echo(f'Resuming: loaded {len(all_products)} existing products, skipping {completed}')
+
+    try:
+        first_active = True
+        for category_name, path in CATEGORIES:
+            if category_name in completed:
+                click.echo(f'Skipping {category_name} (already scraped)')
+                continue
+
+            if not first_active:
                 click.echo(f'  Pausing {CATEGORY_PAUSE}s between categories...')
                 time.sleep(CATEGORY_PAUSE)
+            first_active = False
 
             click.echo(f'Scraping {category_name}...')
             page = 1
@@ -114,7 +155,7 @@ def main():
                 all_products.extend(products)
                 click.echo(f'  Page {page}: +{len(products)} products (total so far: {plr["resultCount"]})')
 
-                page_size = plr.get('pageSize', 64)
+                page_size    = plr.get('pageSize', 64)
                 result_count = plr.get('resultCount', 0)
                 if page * page_size >= result_count:
                     break
@@ -126,26 +167,19 @@ def main():
                 else:
                     time.sleep(DELAY_SECONDS)
 
-        df = (pd.DataFrame(all_products)
-                .reindex(columns=['category', 'brand', 'name', 'price', 'avg_rating', 'num_ratings'])
-                .drop_duplicates(subset=['name', 'brand'])
-                .reset_index(drop=True))
+            completed.add(category_name)
+            save_checkpoint(completed)
+            df = save_products(all_products)
+            click.echo(f'  {category_name} done. {len(df)} unique products saved so far.')
 
-        df.to_csv(OUTPUT_PATH, index=False)
-        click.echo(f'Success! {len(df)} products saved to data.csv')
-        input('Press enter to continue')
+        df = save_products(all_products)
+        click.echo(f'Success! {len(df)} products saved to {OUTPUT_PATH}')
 
     except Exception as e:
-        click.echo(f'Process failed because {e}')
+        click.echo(f'Process failed: {e}')
         if all_products:
-            click.echo(f'Saving {len(all_products)} products collected before failure...')
-            df = (pd.DataFrame(all_products)
-                    .reindex(columns=['category', 'brand', 'name', 'price', 'avg_rating', 'num_ratings'])
-                    .drop_duplicates(subset=['name', 'brand'])
-                    .reset_index(drop=True))
-            df.to_csv(OUTPUT_PATH, index=False)
-            click.echo(f'{len(df)} products saved to data.csv')
-        input('Press enter to continue')
+            df = save_products(all_products)
+            click.echo(f'Saved {len(df)} products collected before failure to {OUTPUT_PATH}')
 
 
 if __name__ == '__main__':
